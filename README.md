@@ -1,80 +1,91 @@
-# 🩺 Medical Report Summarizer (Demo)
+# 🏥 Medical Report Summarizer
 
-> **Goal:** Paste or upload a medical report → get a short, clear summary for a **Patient** or a **Doctor**.  
-> **Note:** This is for **learning only**. Do **not** use for real medical decisions.
+A **Streamlit-based web application** that summarizes lengthy medical reports into concise, easy-to-read summaries using Natural Language Processing (NLP).
 
----
-
-## 🧒 Super-Simple Plan (like for 5th standard)
-
-1. **Install Python** (version 3.9+).
-2. Open **Terminal / Command Prompt**.
-3. Go to this project folder.
-4. Type: `pip install -r requirements.txt`
-5. Get your **OpenAI API Key** from https://platform.openai.com/
-6. **Run the app:** `streamlit run app.py`
-7. Paste some report text, or upload a PDF → click **Summarize**.
-
-That’s it! 🎉
+## 📌 Features
+- Upload medical reports in `.txt` format
+- Automatic text summarization
+- Clean and user-friendly interface
+- Fast processing using Python and NLP libraries
 
 ---
 
-## 🔑 Set API Key (2 ways)
-
-- **Inside the app**: Paste the key in the text box (easiest).  
-- **Or via environment** (Windows PowerShell):
-  ```powershell
-  setx OPENAI_API_KEY "your_key_here"
-  ```
-  **macOS/Linux (bash/zsh):**
-  ```bash
-  export OPENAI_API_KEY="your_key_here"
-  ```
+## 🛠️ Tech Stack
+- **Python** 3.13+
+- **Streamlit** – Web app framework
+- **NLTK / spaCy / Transformers** – NLP processing
+- **Pandas & NumPy** – Data handling
+- **PyTorch / TensorFlow** (optional, for deep learning models)
 
 ---
 
-## 🧪 Try with Sample Text
-
-Click **Use Sample** in the app. A fake (dummy) discharge summary is provided.
-
----
-
-## 🧠 What this shows (matches the JD)
-
-- **LLM Summarization** of medical reports (Generative AI ✅)
-- **Simple PHI masking** before sending to the model (privacy ✅)
-- **Doctor vs Patient** tone (NLP prompt design ✅)
-- **PDF text extraction** (data handling ✅)
+## 📂 Project Structure
+```
+medical_report_summarizer/
+│── app.py                      # Main Streamlit app
+│── cli_simple.py                # CLI version
+│── requirements.txt             # Python dependencies
+│── README.md                    # Project documentation
+│── sample_reports/              # Sample medical reports
+│    └── sample_discharge_summary.txt
+```
 
 ---
 
-## 🛡️ Safety Notes
+## ⚙️ Installation & Setup
 
-- Demo only. Not medical advice.
-- Do not upload real patient data.
-- The PHI masking here is **basic**. Real systems need much stronger privacy tools.
+### 1️⃣ Clone the Repository
+```bash
+git clone https://github.com/devags2005/medical_report_summarizer.git
+cd medical_report_summarizer
+```
+
+### 2️⃣ Create a Virtual Environment (Optional but Recommended)
+```bash
+python -m venv venv
+venv\Scripts\activate    # Windows
+source venv/bin/activate # Mac/Linux
+```
+
+### 3️⃣ Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4️⃣ Run the Streamlit App
+```bash
+streamlit run app.py
+```
 
 ---
 
-## 🧰 CLI (terminal) Version
-
-1. Put your text report in a file, e.g., `report.txt`.
-2. Set env var:  
-   - Windows: `setx OPENAI_API_KEY "your_key"`  
-   - macOS/Linux: `export OPENAI_API_KEY="your_key"`
-3. Run:  
-   ```bash
-   python cli_simple.py report.txt
-   ```
+## 📸 Screenshot
+*(Add a screenshot of your app running here)*
 
 ---
 
-## ✅ Quick Checklist for Demo Day
+## 🧪 Example Usage
+1. Start the Streamlit app
+2. Upload a `.txt` medical report
+3. Click **Summarize**
+4. View the concise summary instantly
 
-- [ ] Show **Patient** summary (simple words).  
-- [ ] Show **Doctor** summary (headings + clinical terms).  
-- [ ] Tick "**Mask personal details**" to show privacy awareness.  
-- [ ] Use a PDF and show it still works.  
-- [ ] End with “This is a demo, not medical advice.”
+---
 
-Good luck! 🚀
+## 🤝 Contributing
+Contributions are welcome!  
+1. Fork the repo
+2. Create a new branch (`feature-xyz`)
+3. Commit changes
+4. Submit a Pull Request
+
+---
+
+## 📄 License
+This project is licensed under the **MIT License**.
+
+---
+
+## 👩‍💻 Author
+**Deva Tharani G S**  
+🔗 [GitHub](https://github.com/devags2005)
