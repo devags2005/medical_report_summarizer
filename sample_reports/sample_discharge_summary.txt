@@ -1,0 +1,34 @@
+Patient Name: John Doe
+MRN: 123456
+Date of Admission: 12/08/2025
+Date of Discharge: 14/08/2025
+Primary Physician: Dr. Smith
+Contact: +1-202-555-0132 | john.doe@example.com
+
+Chief Complaint:
+- Chest pain for 2 days, worse on exertion, relieved with rest.
+
+History of Present Illness:
+- 54-year-old male with hypertension and high cholesterol.
+- No prior heart attack. Non-smoker. Occasional alcohol.
+
+Examination/Vitals:
+- BP 150/90 mmHg, HR 92 bpm, SpO2 98% on room air.
+
+Investigations:
+- ECG: Non-specific ST-T changes.
+- Troponin I: Negative x2.
+- Lipid Panel: LDL 162 mg/dL.
+- Chest X-ray: No acute findings.
+
+Hospital Course:
+- Monitored in observation unit. No recurrent severe pain.
+- Given aspirin, statin, beta-blocker. Education on lifestyle changes.
+
+Assessment/Impression:
+- Likely stable angina (no evidence of myocardial infarction).
+
+Plan/Discharge Instructions:
+- Continue: Aspirin 81 mg OD, Atorvastatin 40 mg HS, Metoprolol 25 mg BD.
+- Follow-up with cardiology clinic in 1 week.
+- Return immediately if severe chest pain, shortness of breath, or fainting.
