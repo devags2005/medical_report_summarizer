@@ -27,7 +27,7 @@ Built for **doctors, healthcare professionals, and researchers** to quickly extr
 ---
 
 ## 📸 **UI Preview** 
-![Medical Report Summarizer Screenshot](app screenshot.png)
+![Medical Report Summarizer Screenshot](app_screenshot.png)
 
 ---
 
