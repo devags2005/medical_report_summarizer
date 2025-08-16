@@ -1,3 +1,16 @@
-streamlit
-openai>=1.30.0
-pdfplumber
+# Core app dependencies
+streamlit>=1.24.0
+nltk>=3.8
+scikit-learn>=1.3
+networkx>=3.1
+numpy>=1.24
+pandas>=1.5
+
+# Hugging Face for Abstractive Summarization
+transformers>=4.30.0
+torch>=2.0.0
+sentencepiece>=0.1.99   # Required for some Transformer models (like T5)
+
+# Optional but recommended
+accelerate>=0.20.3      # Speeds up inference with HF pipelines
+safetensors>=0.3.0      # Safer model file loading
