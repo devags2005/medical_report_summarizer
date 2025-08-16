@@ -1,181 +1,181 @@
-import re
 import streamlit as st
-import pdfplumber
-from transformers import pipeline
-from fpdf import FPDF
+import nltk
+import networkx as nx
+from sklearn.feature_extraction.text import TfidfVectorizer
+from transformers import pipeline, Pipeline
+import torch
+import re
+from typing import List
 
-# ---------------------------- Load Summarizer ----------------------------
-@st.cache_resource
-def load_summarizer():
-    return pipeline("summarization", model="facebook/bart-large-cnn")
+# Download required NLTK resources
+nltk.download('punkt')
+nltk.download('punkt_tab')
 
-summarizer = load_summarizer()
+# ---------------------------
+# Streamlit Page Config
+# ---------------------------
+st.set_page_config(page_title="Medical Report Summarizer", layout="wide")
+st.markdown("""
+<style>
+body {
+    background-color: #1e1e1e;
+    color: #f5f5f5;
+}
+.title {
+    font-size: 2.2em;
+    text-align: center;
+    color: #00c4ff;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+.summary-box {
+    background-color: #292929;
+    padding: 15px;
+    border-radius: 10px;
+    color: #f5f5f5;
+    font-size: 1.05em;
+    border: 1px solid #00c4ff;
+}
+.stat-card {
+    background-color: #333333;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ---------------------------- Helper Functions ----------------------------
-def extract_text_from_pdf(uploaded_file) -> str:
+st.markdown("<h1 class='title'>🩺 Medical Report Summarizer</h1>", unsafe_allow_html=True)
+
+# ---------------------------
+# Utility Functions
+# ---------------------------
+def split_into_sentences(text: str) -> List[str]:
+    return nltk.sent_tokenize(text)
+
+def extractive_textrank(text: str, num_sentences: int = 3) -> str:
+    sentences = split_into_sentences(text)
+    if len(sentences) <= num_sentences:
+        return text
+
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(sentences)
+    similarity_graph = (tfidf_matrix * tfidf_matrix.T).toarray()
+
+    nx_graph = nx.from_numpy_array(similarity_graph)
+    scores = nx.pagerank(nx_graph)
+
+    ranked_sentences = sorted(((scores[i], s) for i, s in enumerate(sentences)), reverse=True)
+    top_sentences = [s for _, s in ranked_sentences[:num_sentences]]
+    return " ".join(top_sentences)
+
+# ---------------------------
+# Hugging Face Pipeline Loader
+# ---------------------------
+@st.cache_resource(show_spinner=False)
+def load_abstractive_pipeline() -> Pipeline | None:
     try:
-        with pdfplumber.open(uploaded_file) as pdf:
-            pages = [page.extract_text() or "" for page in pdf.pages]
-        text = "\n".join(pages).strip()
-        if not text:
-            return "ERROR: PDF contains no readable text."
-        return text
-    except Exception as e:
-        return f"ERROR: Could not read PDF. Details: {e}"
+        device = 0 if torch.cuda.is_available() else -1
+        return pipeline("summarization", model="facebook/bart-large-cnn", device=device)
+    except Exception:
+        return None
 
-def basic_anonymize(text: str) -> str:
-    if not text:
-        return text
-    text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[EMAIL]", text)
-    text = re.sub(r"\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?){1,2}\d{3,4}\b", "[PHONE]", text)
-    text = re.sub(r"\b(?:\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\d{4}[/\-]\d{1,2}[/\-]\d{1,2})\b", "[DATE]", text)
-    text = re.sub(r"\b(MRN[:\s]*\d{5,}|Record\s*No[:\s]*\d{5,})\b", "[MRN]", text, flags=re.IGNORECASE)
-    text = re.sub(r"\b(Name|Patient Name|Pt\. Name)\s*:\s*[\w ,.'-]+\b", r"\1: [NAME]", text, flags=re.IGNORECASE)
-    return text
+summarizer = load_abstractive_pipeline()
 
-def _phrase(tone: str, patient: str, doctor: str) -> str:
-    return patient if tone == "Patient" else doctor
+def abstractive_summarize(text: str, chunk_size: int = 350, overlap: int = 20) -> str:
+    chunks = chunk_text(text, words_per_chunk=chunk_size, overlap=overlap)
+    summaries = []
 
-def call_huggingface_summary_paragraph(text: str, tone: str, original_text: str) -> str:
-    """
-    Generate a paragraph-style summary with Patient/Doctor tone.
-    """
-    # Extract basic info
-    patient_name = "Not mentioned"
-    age_gender = ""
-    complaint = "Not mentioned"
-    diagnosis = "Not mentioned"
-    procedure = "Not mentioned"
-    outcome = "Not mentioned"
-    meds = ""
-    follow_up = ""
+    progress = st.progress(0)
+    for i, chunk in enumerate(chunks):
+        try:
+            summary = summarizer(chunk, max_length=130, min_length=40, do_sample=False)[0]['summary_text']
+            summaries.append(summary)
+        except RuntimeError as e:
+            if "CUDA out of memory" in str(e):
+                st.error("⚠️ GPU out of memory. Try reducing chunk size or use Extractive mode.")
+                return ""
+            else:
+                st.error(str(e))
+                return ""
+        progress.progress((i + 1) / len(chunks))
+    return " ".join(summaries)
 
-    # Patient info
-    match_name = re.search(r"Patient Name\s*:\s*([\w ,.'-]+)", original_text, re.IGNORECASE)
-    if match_name:
-        patient_name = match_name.group(1).strip()
-    match_age = re.search(r"Age\s*:\s*(\d{1,3})", original_text, re.IGNORECASE)
-    match_gender = re.search(r"(Male|Female)", original_text, re.IGNORECASE)
-    if match_age:
-        age_gender = f"{match_age.group(1)} years"
-    if match_gender:
-        age_gender += f", {match_gender.group(1)}"
+def chunk_text(text: str, words_per_chunk: int = 350, overlap: int = 20) -> List[str]:
+    words = text.split()
+    if len(words) <= words_per_chunk:
+        return [" ".join(words)]
+    chunks = []
+    step = int(words_per_chunk * (1 - overlap / 100))
+    i = 0
+    while i < len(words):
+        chunk = words[i: i + words_per_chunk]
+        chunks.append(" ".join(chunk))
+        i += step
+    return chunks
 
-    # Complaint
-    complaint_match = re.search(r"(Chief Complaint\s*:\s*.+)", original_text, re.IGNORECASE)
-    if complaint_match:
-        complaint = complaint_match.group(1).split(":",1)[1].strip()
+# ---------------------------
+# Sidebar Controls
+# ---------------------------
+st.sidebar.header("⚙️ Settings")
+mode = st.sidebar.radio("Select Summarization Type", ["Extractive", "Abstractive"])
 
-    # Diagnosis
-    orig_low = original_text.lower()
-    if "st elevation" in orig_low and "troponin" in orig_low and "positive" in orig_low:
-        diagnosis = "Heart attack" if tone=="Patient" else "Acute myocardial infarction (STEMI)"
-    elif "angina" in orig_low:
-        diagnosis = "Chest pain likely due to angina" if tone=="Patient" else "Stable angina"
-    elif "pneumonia" in orig_low:
-        diagnosis = "Pneumonia"
+if mode == "Abstractive":
+    chunk_size = st.sidebar.slider("Chunk size (words)", 200, 600, 350, step=50)
+    overlap = st.sidebar.slider("Chunk overlap (%)", 0, 50, 20, step=5)
 
-    # Procedure
-    procedure_match = re.search(r"(Procedure\s*:\s*.+)", original_text, re.IGNORECASE)
-    if procedure_match:
-        procedure = procedure_match.group(1).split(":",1)[1].strip()
+if torch.cuda.is_available():
+    st.sidebar.caption(f"GPU: {torch.cuda.get_device_name(0)}")
+else:
+    st.sidebar.caption("Running on CPU")
 
-    # Outcome
-    outcome_match = re.search(r"(discharge[d]?|stable|recovered|improved).*?(\.|,|\n)", original_text, re.IGNORECASE)
-    if outcome_match:
-        outcome = outcome_match.group(0).strip()
+# ---------------------------
+# Input Section
+# ---------------------------
+st.subheader("Upload Medical Report or Paste Text")
+uploaded_file = st.file_uploader("Upload .txt file", type=["txt"])
+text = ""
 
-    # Medications
-    meds_match = re.search(r"(Medications\s*:\s*.+)", original_text, re.IGNORECASE)
-    if meds_match:
-        meds = meds_match.group(1).split(":",1)[1].strip()
-    follow_up_match = re.search(r"(Follow[- ]?up\s*:\s*.+)", original_text, re.IGNORECASE)
-    if follow_up_match:
-        follow_up = follow_up_match.group(1).split(":",1)[1].strip()
+if uploaded_file is not None:
+    text = uploaded_file.read().decode("utf-8")
+else:
+    text = st.text_area("Enter medical report text here", height=250)
 
-    # Build paragraph dynamically based on tone
-    if tone == "Patient":
-        paragraph = f"{patient_name}"
-        if age_gender:
-            paragraph += f", {age_gender}"
-        paragraph += f", experienced {complaint}. "
-        if diagnosis != "Not mentioned":
-            paragraph += f"This was diagnosed as {diagnosis}. "
-        if procedure != "Not mentioned":
-            paragraph += f"The treatment performed was {procedure}. "
-        if outcome != "Not mentioned":
-            paragraph += f"The outcome was {outcome}. "
-        if meds:
-            paragraph += f"Medications prescribed include {meds}. "
-        if follow_up:
-            paragraph += f"Follow-up is scheduled: {follow_up}."
-    else:  # Doctor tone
-        paragraph = f"Patient: {patient_name}"
-        if age_gender:
-            paragraph += f", {age_gender}"
-        paragraph += f". Chief complaint: {complaint}. "
-        if diagnosis != "Not mentioned":
-            paragraph += f"Diagnosis: {diagnosis}. "
-        if procedure != "Not mentioned":
-            paragraph += f"Procedure/Treatment: {procedure}. "
-        if outcome != "Not mentioned":
-            paragraph += f"Outcome: {outcome}. "
-        if meds:
-            paragraph += f"Medications: {meds}. "
-        if follow_up:
-            paragraph += f"Follow-up: {follow_up}."
+if st.button("Load Sample Medical Report"):
+    text = """Patient Name: John Doe
+Age: 45
+Gender: Male
+Diagnosis: Type 2 Diabetes Mellitus
+Medications: Metformin 500mg twice daily
+Lab Results: Fasting blood glucose - 145 mg/dL, HbA1c - 7.8%
+Plan: Continue Metformin, start lifestyle modifications, follow-up in 3 months.
+"""
 
-    return paragraph
+if text.strip():
+    st.subheader("Summary Options")
+    sent_count = st.slider("Number of sentences (for Extractive)", 2, 10, 3)
 
-def create_pdf_paragraph(summary_text: str) -> bytes:
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", size=16)
-    pdf.set_text_color(0, 0, 128)
-    pdf.cell(200, 10, "Medical Report Summary", ln=True, align="C")
-    pdf.ln(10)
-    pdf.set_font("Arial", size=12)
-    pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 8, summary_text)
-    return pdf.output(dest='S').encode('latin1')
+    if st.button("Generate Summary"):
+        with st.spinner("Summarizing..."):
+            if mode == "Extractive":
+                summary = extractive_textrank(text, num_sentences=sent_count)
+            else:
+                summary = abstractive_summarize(text, chunk_size=chunk_size, overlap=overlap)
 
-# ---------------------------- UI ----------------------------
-st.set_page_config(page_title="Medical Report Summarizer", page_icon="🩺")
-st.title("🩺 Medical Report Summarizer")
+        if summary:
+            st.subheader("📄 Summary")
+            with st.expander("View Summary", expanded=True):
+                st.markdown(f"<div class='summary-box'>{summary}</div>", unsafe_allow_html=True)
 
-mask_phi = st.checkbox("Mask personal details before summarizing", value=True)
-tone = st.radio("Select Summary Tone", ["Patient", "Doctor"], index=0)
-mode = st.radio("Input Method", ["Paste Text", "Upload PDF", "Use Sample"], index=0)
+            st.download_button("📥 Download Summary", summary, file_name="summary.txt")
 
-raw_text = ""
-if mode == "Paste Text":
-    raw_text = st.text_area("Paste your medical report text here:", height=220)
-elif mode == "Upload PDF":
-    uploaded_file = st.file_uploader("Upload a medical report PDF", type=["pdf"])
-    if uploaded_file is not None:
-        raw_text = extract_text_from_pdf(uploaded_file)
-elif mode == "Use Sample":
-    raw_text = """Patient Name: John Smith
-Age: 65 years
-History: Hypertension, high cholesterol
-Chief Complaint: Severe chest pain for 4 hours radiating to left arm with sweating
-ECG: ST elevation in leads II, III, aVF
-Troponin: Positive
-Procedure: PCI with stent in RCA
-Medications: Aspirin, Clopidogrel, Statin, Metoprolol
-Follow-up: Cardiology OPD after 2 weeks
-Outcome: Patient discharged in stable condition"""
-
-if st.button("✨ Summarize"):
-    if not raw_text or raw_text.startswith("ERROR"):
-        st.error("Please provide valid text or a readable PDF.")
-    else:
-        text_to_summarize = basic_anonymize(raw_text) if mask_phi else raw_text
-        with st.spinner("Generating paragraph-style summary..."):
-            summary = call_huggingface_summary_paragraph(text_to_summarize, tone, raw_text)
-
-        st.subheader("📝 Summary")
-        st.write(summary)
-
-        st.download_button("⬇️ Download as TXT", summary.encode("utf-8"), "summary.txt")
-        st.download_button("⬇️ Download as PDF", create_pdf_paragraph(summary), "summary.pdf")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown(f"<div class='stat-card'><b>Original:</b> {len(text.split())} words</div>", unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"<div class='stat-card'><b>Summary:</b> {len(summary.split())} words</div>", unsafe_allow_html=True)
+            with col3:
+                ratio = len(summary.split()) / len(text.split()) * 100
+                st.markdown(f"<div class='stat-card'><b>Compression:</b> {ratio:.1f}%</div>", unsafe_allow_html=True)
+else:
+    st.info("Please upload a file or enter text to summarize.")
